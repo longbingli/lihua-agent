@@ -35,28 +35,21 @@ import java.util.concurrent.atomic.AtomicReference;
 @RequiredArgsConstructor
 public class AiSseStreamChatService implements AiStreamChatService {
 
-    // SSE 超时时间
     private static final Long SSE_TIMEOUT = 180_000L;
-    // 流式调用超时时间
     private static final long STREAM_WAIT_SECONDS = 60L;
-    // 心跳间隔时间
     private static final long HEARTBEAT_INITIAL_DELAY_SECONDS = 15L;
-    // 心跳间隔时间
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15L;
-    // 模型列表
+
     private final List<AiStreamingModelClient> streamingModelClients;
-    // 系统提示语
     private final String systemPrompt;
-    // 执行器
     private final ExecutorService executorService;
-    // 心跳执行器
     private final ScheduledExecutorService heartbeatScheduler = new ScheduledThreadPoolExecutor(2);
 
     @Override
     public SseEmitter streamChat(String userMessage) {
         validateUserMessage(userMessage);
         if (streamingModelClients == null || streamingModelClients.isEmpty()) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "未配置可用的流式 AI 模型");
+            throw new BusinessException(ErrorCode.AI_MODEL_NOT_CONFIGURED, "未配置可用的流式 AI 模型");
         }
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
@@ -97,8 +90,8 @@ public class AiSseStreamChatService implements AiStreamChatService {
         }
 
         completeWithError(emitter, lastError == null
-                ? new BusinessException(ErrorCode.OPERATION_ERROR, "AI 流式服务暂不可用，请稍后重试")
-                : lastError);
+                ? new BusinessException(ErrorCode.AI_FALLBACK_EXHAUSTED, "AI 流式服务暂不可用，请稍后重试")
+                : AiErrorSanitizer.toBusinessException(lastError, ErrorCode.AI_FALLBACK_EXHAUSTED, "AI 流式服务暂不可用，请稍后重试"));
     }
 
     private void streamWithClient(ChatRequest chatRequest, SseEmitter emitter, AiStreamingModelClient client,
@@ -133,13 +126,16 @@ public class AiSseStreamChatService implements AiStreamChatService {
 
         boolean finished = latch.await(STREAM_WAIT_SECONDS, TimeUnit.SECONDS);
         if (!finished) {
-            throw new RuntimeException("AI 流式响应超时");
+            throw new BusinessException(ErrorCode.AI_REQUEST_TIMEOUT, "AI 流式响应超时");
         }
         if (errorRef.get() != null) {
-            throw new RuntimeException(errorRef.get());
+            throw AiErrorSanitizer.toBusinessException(errorRef.get(), ErrorCode.AI_STREAM_INTERRUPTED, "AI 流式响应中断");
         }
 
         ChatResponse response = responseRef.get();
+        if (!StringUtils.hasText(fullContent.toString())) {
+            throw new BusinessException(ErrorCode.AI_RESPONSE_EMPTY, "AI 流式响应为空");
+        }
         long costMs = System.currentTimeMillis() - totalStart;
         TokenUsage tokenUsage = response == null ? null : response.tokenUsage();
         sendEvent(emitter, "done", AiStreamDoneEvent.builder()
@@ -198,19 +194,24 @@ public class AiSseStreamChatService implements AiStreamChatService {
         try {
             emitter.send(SseEmitter.event().name(eventName).data(data));
         } catch (IOException e) {
-            throw new RuntimeException("发送 SSE 事件失败", e);
+            throw new BusinessException(ErrorCode.AI_STREAM_SEND_FAILED, "发送 SSE 事件失败");
         }
     }
 
     private void completeWithError(SseEmitter emitter, Throwable throwable) {
+        BusinessException businessException = AiErrorSanitizer.toBusinessException(
+                throwable,
+                ErrorCode.AI_FALLBACK_EXHAUSTED,
+                "AI 流式服务暂不可用，请稍后重试"
+        );
         try {
             sendEvent(emitter, "error", new AiStreamErrorEvent(
-                    ErrorCode.OPERATION_ERROR.getCode(),
-                    AiErrorSanitizer.sanitize(throwable)
+                    businessException.getCode(),
+                    AiErrorSanitizer.sanitize(businessException)
             ));
             emitter.complete();
         } catch (Exception e) {
-            emitter.completeWithError(new BusinessException(ErrorCode.OPERATION_ERROR, "AI 流式服务暂不可用，请稍后重试"));
+            emitter.completeWithError(new BusinessException(ErrorCode.AI_STREAM_INTERRUPTED, "AI 流式服务暂不可用，请稍后重试"));
         }
     }
 

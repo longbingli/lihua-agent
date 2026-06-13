@@ -33,7 +33,7 @@ public class AiGatewayChatService implements AiChatService {
     public AiChatResult chat(String userMessage) {
         validateUserMessage(userMessage);
         if (aiModelClients == null || aiModelClients.isEmpty()) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "未配置可用的 AI 模型");
+            throw new BusinessException(ErrorCode.AI_MODEL_NOT_CONFIGURED, "未配置可用的 AI 模型");
         }
 
         ChatRequest chatRequest = buildChatRequest(userMessage);
@@ -45,6 +45,9 @@ public class AiGatewayChatService implements AiChatService {
             long attemptStart = System.currentTimeMillis();
             try {
                 ChatResponse response = client.getChatModel().chat(chatRequest);
+                if (response == null || response.aiMessage() == null || !StringUtils.hasText(response.aiMessage().text())) {
+                    throw new BusinessException(ErrorCode.AI_RESPONSE_EMPTY, "AI 响应为空");
+                }
                 long totalCost = System.currentTimeMillis() - totalStart;
                 log.info("AI 模块调用成功，alias={}, modelName={}, fallbackUsed={}, costMs={}",
                         client.getAlias(), client.getModelName(), index > 0, totalCost);
@@ -62,7 +65,9 @@ public class AiGatewayChatService implements AiChatService {
                 System.currentTimeMillis() - totalStart,
                 lastError == null ? "Unknown" : lastError.getClass().getSimpleName(),
                 AiErrorSanitizer.sanitize(lastError));
-        throw new BusinessException(ErrorCode.OPERATION_ERROR, "AI 模型服务暂不可用，请稍后重试");
+        throw AiErrorSanitizer.toBusinessException(lastError,
+                ErrorCode.AI_FALLBACK_EXHAUSTED,
+                "AI 模型服务暂不可用，请稍后重试");
     }
 
     public static String resolveSystemPromptFromAnnotation() {
@@ -77,7 +82,7 @@ public class AiGatewayChatService implements AiChatService {
             byte[] bytes = resource.getInputStream().readAllBytes();
             return new String(bytes, StandardCharsets.UTF_8).trim();
         } catch (NoSuchMethodException | IOException e) {
-            throw new IllegalStateException("加载 AI 系统提示词失败", e);
+            throw new BusinessException(ErrorCode.AI_SERVICE_CONFIG_INVALID, "加载 AI 系统提示词失败");
         }
     }
 
