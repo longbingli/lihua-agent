@@ -63,3 +63,24 @@ logging:
   level:
     org.springframework.web: info
     com.bingli.lihuaAgent: info
+
+ai:
+  models:
+    logRequests: ${AI_LOG_REQUESTS:false}
+    logResponses: ${AI_LOG_RESPONSES:false}
+    primary:
+      enabled: ${AI_PRIMARY_ENABLED:false}
+      alias: primary
+      baseUrl: ${AI_PRIMARY_BASE_URL:https://api.openai.com/v1}
+      apiKey: ${AI_PRIMARY_API_KEY:}
+      modelName: ${AI_PRIMARY_MODEL_NAME:gpt-4o-mini}
+      timeout: ${AI_PRIMARY_TIMEOUT:30s}
+      maxRetries: ${AI_PRIMARY_MAX_RETRIES:1}
+    fallbacks:
+      - enabled: ${AI_FALLBACK_0_ENABLED:false}
+        alias: fallback-0
+        baseUrl: ${AI_FALLBACK_0_BASE_URL:https://api.openai.com/v1}
+        apiKey: ${AI_FALLBACK_0_API_KEY:}
+        modelName: ${AI_FALLBACK_0_MODEL_NAME:gpt-4o-mini}
+        timeout: ${AI_FALLBACK_0_TIMEOUT:30s}
+        maxRetries: ${AI_FALLBACK_0_MAX_RETRIES:1}

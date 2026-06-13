@@ -28,6 +28,7 @@
     </scm>
     <properties>
         <java.version>17</java.version>
+        <langchain4j.version>1.16.2</langchain4j.version>
     </properties>
     <dependencies>
         <dependency>
@@ -51,6 +52,17 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- LangChain4J OpenAI 兼容模型接入 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
         <!-- Sa-Token 权限认证，在线文档：https://sa-token.cc -->
         <dependency>
             <groupId>cn.dev33</groupId>
@@ -186,3 +198,4 @@
     </build>
 
 </project>
+
