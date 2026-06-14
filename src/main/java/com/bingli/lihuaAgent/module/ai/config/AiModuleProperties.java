@@ -18,6 +18,8 @@ public class AiModuleProperties {
 
     private boolean logResponses = false;
 
+    private Attachment attachment = new Attachment();
+
     private ModelConfig primary = new ModelConfig();
 
     private List<ModelConfig> fallbacks = new ArrayList<>();
@@ -35,6 +37,30 @@ public class AiModuleProperties {
         }
         model.validate();
         models.add(model);
+    }
+
+    @Data
+    public static class Attachment {
+
+        @DurationUnit(ChronoUnit.MINUTES)
+        private Duration ttl = Duration.ofHours(1);
+
+        private int maxDocumentChars = 20000;
+
+        private int maxImageSizeMb = 10;
+
+        private int maxTextSizeMb = 5;
+
+        private int maxPdfSizeMb = 20;
+
+        public void validate() {
+            if (ttl.compareTo(Duration.ofMinutes(15)) < 0 || ttl.compareTo(Duration.ofHours(24)) > 0) {
+                throw new IllegalStateException("AI 临时附件 ttl 必须在 15 分钟到 24 小时之间");
+            }
+            if (maxDocumentChars <= 0) {
+                throw new IllegalStateException("AI 文档最大注入字符数必须大于 0");
+            }
+        }
     }
 
     @Data

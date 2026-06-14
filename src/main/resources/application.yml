@@ -66,6 +66,12 @@ logging:
 
 ai:
   models:
+    attachment:
+      ttl: 1h
+      maxDocumentChars: 20000
+      maxImageSizeMb: 10
+      maxTextSizeMb: 5
+      maxPdfSizeMb: 20
     logRequests: ${AI_LOG_REQUESTS:false}
     logResponses: ${AI_LOG_RESPONSES:false}
     primary:
@@ -84,3 +90,4 @@ ai:
         modelName: ${AI_FALLBACK_0_MODEL_NAME:gpt-4o-mini}
         timeout: ${AI_FALLBACK_0_TIMEOUT:30s}
         maxRetries: ${AI_FALLBACK_0_MAX_RETRIES:1}
+

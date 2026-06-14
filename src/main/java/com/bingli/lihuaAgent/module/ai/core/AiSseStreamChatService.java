@@ -2,6 +2,9 @@ package com.bingli.lihuaAgent.module.ai.core;
 
 import com.bingli.lihuaAgent.common.ErrorCode;
 import com.bingli.lihuaAgent.exception.BusinessException;
+import com.bingli.lihuaAgent.model.dto.ai.AiAttachmentRequest;
+import com.bingli.lihuaAgent.model.enums.AiAttachmentTypeEnum;
+import com.bingli.lihuaAgent.model.vo.ai.AiAttachmentContent;
 import com.bingli.lihuaAgent.module.ai.api.AiStreamChatService;
 import com.bingli.lihuaAgent.module.ai.api.event.AiStreamDoneEvent;
 import com.bingli.lihuaAgent.module.ai.api.event.AiStreamErrorEvent;
@@ -9,7 +12,10 @@ import com.bingli.lihuaAgent.module.ai.api.event.AiStreamMetaEvent;
 import com.bingli.lihuaAgent.module.ai.api.event.AiStreamTokenEvent;
 import com.bingli.lihuaAgent.module.ai.util.AiErrorSanitizer;
 import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.Content;
+import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.response.ChatResponse;
@@ -17,12 +23,14 @@ import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.output.TokenUsage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
@@ -41,20 +49,22 @@ public class AiSseStreamChatService implements AiStreamChatService {
     private static final long HEARTBEAT_INTERVAL_SECONDS = 15L;
 
     private final List<AiStreamingModelClient> streamingModelClients;
-    private final String systemPrompt;
+    private final String defaultSystemPrompt;
     private final ExecutorService executorService;
+    private final AiAttachmentResolver aiAttachmentResolver;
     private final ScheduledExecutorService heartbeatScheduler = new ScheduledThreadPoolExecutor(2);
 
     @Override
-    public SseEmitter streamChat(String userMessage) {
-        validateUserMessage(userMessage);
+    public SseEmitter streamChat(String userMessage, List<String> imageUrls, List<AiAttachmentRequest> attachments,
+                                 String systemPrompt, String imageDetailLevel, Long loginUserId) {
+        validateInput(userMessage, imageUrls, attachments);
         if (streamingModelClients == null || streamingModelClients.isEmpty()) {
             throw new BusinessException(ErrorCode.AI_MODEL_NOT_CONFIGURED, "未配置可用的流式 AI 模型");
         }
 
         SseEmitter emitter = new SseEmitter(SSE_TIMEOUT);
         registerLifecycleCallbacks(emitter);
-        ChatRequest chatRequest = buildChatRequest(userMessage);
+        ChatRequest chatRequest = buildChatRequest(userMessage, imageUrls, attachments, systemPrompt, imageDetailLevel, loginUserId);
 
         ScheduledFuture<?> heartbeatFuture = heartbeatScheduler.scheduleAtFixedRate(
                 () -> sendHeartbeat(emitter),
@@ -159,20 +169,75 @@ public class AiSseStreamChatService implements AiStreamChatService {
         emitter.complete();
     }
 
-    private ChatRequest buildChatRequest(String userMessage) {
+    private ChatRequest buildChatRequest(String userMessage, List<String> imageUrls, List<AiAttachmentRequest> attachments,
+                                         String systemPrompt, String imageDetailLevel, Long loginUserId) {
         List<ChatMessage> messages = new ArrayList<>();
-        if (StringUtils.hasText(systemPrompt)) {
-            messages.add(SystemMessage.from(systemPrompt));
+        String resolvedSystemPrompt = StringUtils.hasText(systemPrompt) ? systemPrompt : defaultSystemPrompt;
+        if (StringUtils.hasText(resolvedSystemPrompt)) {
+            messages.add(SystemMessage.from(resolvedSystemPrompt));
         }
-        messages.add(UserMessage.from(userMessage));
-        return ChatRequest.builder()
-                .messages(messages)
-                .build();
+        messages.add(buildUserMessage(userMessage, imageUrls, attachments, imageDetailLevel, loginUserId));
+        return ChatRequest.builder().messages(messages).build();
     }
 
-    private void validateUserMessage(String userMessage) {
-        if (!StringUtils.hasText(userMessage)) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "消息内容不能为空");
+    private UserMessage buildUserMessage(String userMessage, List<String> imageUrls, List<AiAttachmentRequest> attachments,
+                                         String imageDetailLevel, Long loginUserId) {
+        List<Content> contents = new ArrayList<>();
+        if (StringUtils.hasText(userMessage)) {
+            contents.add(TextContent.from(userMessage.trim()));
+        }
+        ImageContent.DetailLevel detailLevel = resolveDetailLevel(imageDetailLevel);
+        appendLegacyImages(contents, imageUrls, detailLevel);
+        appendAttachments(contents, attachments, detailLevel, loginUserId);
+        return UserMessage.from(contents);
+    }
+
+    private void appendLegacyImages(List<Content> contents, List<String> imageUrls, ImageContent.DetailLevel detailLevel) {
+        if (imageUrls == null) {
+            return;
+        }
+        for (String imageUrl : imageUrls) {
+            if (StringUtils.hasText(imageUrl)) {
+                contents.add(ImageContent.from(imageUrl.trim(), detailLevel));
+            }
+        }
+    }
+
+    private void appendAttachments(List<Content> contents, List<AiAttachmentRequest> attachments,
+                                   ImageContent.DetailLevel detailLevel, Long loginUserId) {
+        List<AiAttachmentContent> attachmentContents = aiAttachmentResolver.resolve(attachments, loginUserId);
+        for (AiAttachmentContent attachmentContent : attachmentContents) {
+            if (attachmentContent.getType() == AiAttachmentTypeEnum.IMAGE) {
+                contents.add(ImageContent.from(attachmentContent.getUrl(), detailLevel));
+            } else {
+                contents.add(TextContent.from(buildDocumentPrompt(attachmentContent)));
+            }
+        }
+    }
+
+    private String buildDocumentPrompt(AiAttachmentContent attachmentContent) {
+        return "附件名称：" + attachmentContent.getFileName() + "\n"
+                + "附件类型：" + attachmentContent.getType().getValue() + "\n"
+                + "附件内容：\n" + attachmentContent.getTextContent();
+    }
+
+    private ImageContent.DetailLevel resolveDetailLevel(String imageDetailLevel) {
+        if (!StringUtils.hasText(imageDetailLevel)) {
+            return ImageContent.DetailLevel.AUTO;
+        }
+        try {
+            return ImageContent.DetailLevel.valueOf(imageDetailLevel.trim().replace('-', '_').toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "imageDetailLevel 仅支持 low、medium、high、ultra-high、auto");
+        }
+    }
+
+    private void validateInput(String userMessage, List<String> imageUrls, List<AiAttachmentRequest> attachments) {
+        boolean hasMessage = StringUtils.hasText(userMessage);
+        boolean hasImages = imageUrls != null && imageUrls.stream().anyMatch(StringUtils::hasText);
+        boolean hasAttachments = !CollectionUtils.isEmpty(attachments);
+        if (!hasMessage && !hasImages && !hasAttachments) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "消息内容和附件不能同时为空");
         }
     }
 

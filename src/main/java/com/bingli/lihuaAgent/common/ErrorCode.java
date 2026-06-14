@@ -26,16 +26,15 @@ public enum ErrorCode {
     AI_STREAM_SEND_FAILED(51008, "AI 流式消息发送失败"),
     AI_FALLBACK_EXHAUSTED(51009, "AI 备用模型均不可用"),
     AI_SERVICE_CONFIG_INVALID(51010, "AI 服务配置无效"),
-    AI_CONTENT_BLOCKED(51011, "AI 响应内容受限");
+    AI_CONTENT_BLOCKED(51011, "AI 响应内容受限"),
+    AI_ATTACHMENT_INVALID(51012, "AI 附件无效"),
+    AI_ATTACHMENT_EXPIRED(51013, "AI 附件已过期"),
+    AI_ATTACHMENT_TOO_LARGE(51014, "AI 附件过大"),
+    AI_ATTACHMENT_PARSE_FAILED(51015, "AI 附件解析失败"),
+    AI_ATTACHMENT_UNSUPPORTED_TYPE(51016, "AI 附件类型不支持");
 
-    /**
-     * 状态码
-     */
     private final int code;
 
-    /**
-     * 信息
-     */
     private final String message;
 
     ErrorCode(int code, String message) {

@@ -14,7 +14,9 @@ public enum FileUploadBizEnum {
 
     USER_AVATAR("用户头像", "user_avatar"),
 
-    POST_IMAGE("帖子图片", "post_image");
+    POST_IMAGE("帖子图片", "post_image"),
+
+    AI_ATTACHMENT("AI 临时附件", "ai_attachment");
 
     private final String text;
 
@@ -25,21 +27,10 @@ public enum FileUploadBizEnum {
         this.value = value;
     }
 
-    /**
-     * 获取值列表
-     *
-     * @return
-     */
     public static List<String> getValues() {
         return Arrays.stream(values()).map(item -> item.value).collect(Collectors.toList());
     }
 
-    /**
-     * 根据 value 获取枚举
-     *
-     * @param value
-     * @return
-     */
     public static FileUploadBizEnum getEnumByValue(String value) {
         if (ObjectUtils.isEmpty(value)) {
             return null;

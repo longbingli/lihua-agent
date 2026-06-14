@@ -2,6 +2,7 @@ package com.bingli.lihuaAgent.module.ai.config;
 
 import com.bingli.lihuaAgent.module.ai.api.AiChatService;
 import com.bingli.lihuaAgent.module.ai.api.AiStreamChatService;
+import com.bingli.lihuaAgent.module.ai.core.AiAttachmentResolver;
 import com.bingli.lihuaAgent.module.ai.core.AiGatewayChatService;
 import com.bingli.lihuaAgent.module.ai.core.AiModelClient;
 import com.bingli.lihuaAgent.module.ai.core.AiSseStreamChatService;
@@ -39,17 +40,23 @@ public class AiModuleConfiguration {
     }
 
     @Bean
-    public AiChatService aiChatService(List<AiModelClient> aiModelClients) {
-        return new AiGatewayChatService(aiModelClients, AiGatewayChatService.resolveSystemPromptFromAnnotation());
+    public AiChatService aiChatService(List<AiModelClient> aiModelClients, AiAttachmentResolver aiAttachmentResolver) {
+        return new AiGatewayChatService(
+                aiModelClients,
+                AiGatewayChatService.resolveSystemPromptFromAnnotation(),
+                aiAttachmentResolver
+        );
     }
 
     @Bean
     public AiStreamChatService aiStreamChatService(List<AiStreamingModelClient> aiStreamingModelClients,
+                                                   AiAttachmentResolver aiAttachmentResolver,
                                                    @Qualifier("aiSseExecutor") ExecutorService executorService) {
         return new AiSseStreamChatService(
                 aiStreamingModelClients,
                 AiGatewayChatService.resolveSystemPromptFromAnnotation(),
-                executorService
+                executorService,
+                aiAttachmentResolver
         );
     }
 
