@@ -2,7 +2,6 @@ package com.bingli.lihuaAgent.common;
 
 /**
  * 自定义错误码
- *
  */
 public enum ErrorCode {
 
@@ -31,7 +30,18 @@ public enum ErrorCode {
     AI_ATTACHMENT_EXPIRED(51013, "AI 附件已过期"),
     AI_ATTACHMENT_TOO_LARGE(51014, "AI 附件过大"),
     AI_ATTACHMENT_PARSE_FAILED(51015, "AI 附件解析失败"),
-    AI_ATTACHMENT_UNSUPPORTED_TYPE(51016, "AI 附件类型不支持");
+    AI_ATTACHMENT_UNSUPPORTED_TYPE(51016, "AI 附件类型不支持"),
+
+    RAG_KB_NOT_FOUND(52000, "知识库不存在"),
+    RAG_DOCUMENT_NOT_FOUND(52001, "文档不存在"),
+    RAG_DOCUMENT_STATUS_INVALID(52002, "文档状态不允许当前操作"),
+    RAG_FILE_UNSUPPORTED(52003, "RAG 文档类型不支持"),
+    RAG_PARSE_FAILED(52004, "RAG 文档解析失败"),
+    RAG_CHUNK_FAILED(52005, "RAG 文档分块失败"),
+    RAG_EMBEDDING_FAILED(52006, "RAG 向量化失败"),
+    RAG_VECTOR_STORE_FAILED(52007, "RAG 向量存储失败"),
+    RAG_RETRIEVAL_FAILED(52008, "RAG 检索失败"),
+    RAG_DOCUMENT_NOT_READY(52009, "RAG 文档尚未处理完成");
 
     private final int code;
 
@@ -49,5 +59,4 @@ public enum ErrorCode {
     public String getMessage() {
         return message;
     }
-
 }

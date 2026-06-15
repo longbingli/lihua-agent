@@ -30,6 +30,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 @RestController
@@ -54,10 +55,7 @@ public class AiFileController {
         if (multipartFile == null || multipartFile.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "上传文件不能为空");
         }
-        AiAttachmentTypeEnum typeEnum = AiAttachmentTypeEnum.getByValue(uploadRequest == null ? null : uploadRequest.getType());
-        if (typeEnum == null) {
-            throw new BusinessException(ErrorCode.AI_ATTACHMENT_UNSUPPORTED_TYPE, "仅支持 image、text、pdf 类型");
-        }
+        AiAttachmentTypeEnum typeEnum = resolveAttachmentType(multipartFile, uploadRequest);
         validateFile(multipartFile, typeEnum);
 
         Long loginUserId = StpUtil.getLoginIdAsLong();
@@ -101,8 +99,43 @@ public class AiFileController {
         }
     }
 
+    private AiAttachmentTypeEnum resolveAttachmentType(MultipartFile multipartFile, AiUploadTempFileRequest uploadRequest) {
+        String requestType = uploadRequest == null ? null : uploadRequest.getType();
+        AiAttachmentTypeEnum typeEnum = AiAttachmentTypeEnum.getByValue(requestType);
+        if (typeEnum != null) {
+            return typeEnum;
+        }
+
+        // 为了兼容前端遗漏 type 的场景，按文件后缀和 MIME 做一次兜底识别。
+        String suffix = FileUtil.getSuffix(multipartFile.getOriginalFilename()).toLowerCase(Locale.ROOT);
+        if (IMAGE_SUFFIXES.contains(suffix)) {
+            return AiAttachmentTypeEnum.IMAGE;
+        }
+        if (PDF_SUFFIXES.contains(suffix)) {
+            return AiAttachmentTypeEnum.PDF;
+        }
+        if (TEXT_SUFFIXES.contains(suffix)) {
+            return AiAttachmentTypeEnum.TEXT;
+        }
+
+        String contentType = multipartFile.getContentType();
+        if (StringUtils.hasText(contentType)) {
+            String normalizedContentType = contentType.toLowerCase(Locale.ROOT);
+            if (normalizedContentType.startsWith("image/")) {
+                return AiAttachmentTypeEnum.IMAGE;
+            }
+            if (normalizedContentType.contains("pdf")) {
+                return AiAttachmentTypeEnum.PDF;
+            }
+            if (normalizedContentType.startsWith("text/") || normalizedContentType.contains("json") || normalizedContentType.contains("csv")) {
+                return AiAttachmentTypeEnum.TEXT;
+            }
+        }
+        throw new BusinessException(ErrorCode.AI_ATTACHMENT_UNSUPPORTED_TYPE, "仅支持 image、text、pdf 类型");
+    }
+
     private void validateFile(MultipartFile multipartFile, AiAttachmentTypeEnum typeEnum) {
-        String fileSuffix = FileUtil.getSuffix(multipartFile.getOriginalFilename()).toLowerCase();
+        String fileSuffix = FileUtil.getSuffix(multipartFile.getOriginalFilename()).toLowerCase(Locale.ROOT);
         long fileSize = multipartFile.getSize();
         int limitMb;
         List<String> allowSuffixes;

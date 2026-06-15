@@ -3,20 +3,24 @@ spring:
     name: lihua-agent
 
   datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/lihua-agent
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:1314}
+    driver-class-name: org.postgresql.Driver
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/lihua_agent}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
 
   profiles:
     active: dev
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
 
   data:
     redis:
       host: ${REDIS_HOST:127.0.0.1}
       port: ${REDIS_PORT:6379}
       database: 0
-      # password: ${REDIS_PASSWORD:}
       connect-timeout: 5s
       timeout: 5s
       lettuce:
@@ -35,7 +39,6 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-############## Sa-Token 配置 ##############
 sa-token:
   token-name: satoken
   timeout: 2592000
@@ -90,4 +93,29 @@ ai:
         modelName: ${AI_FALLBACK_0_MODEL_NAME:gpt-4o-mini}
         timeout: ${AI_FALLBACK_0_TIMEOUT:30s}
         maxRetries: ${AI_FALLBACK_0_MAX_RETRIES:1}
-
+  rag:
+    supportedSuffixes:
+      - pdf
+      - doc
+      - docx
+      - txt
+      - md
+    storagePrefix: rag
+    defaultChunkSize: 800
+    defaultChunkOverlap: 120
+    maxFileSizeMb: 20
+    retrievalTopK: 5
+    async:
+      corePoolSize: 2
+      maxPoolSize: 4
+      queueCapacity: 100
+      keepAliveSeconds: 60
+    embedding:
+      enabled: ${AI_RAG_EMBEDDING_ENABLED:false}
+      baseUrl: ${AI_RAG_EMBEDDING_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      apiKey: ${AI_RAG_EMBEDDING_API_KEY:}
+      modelName: ${AI_RAG_EMBEDDING_MODEL:text-embedding-v4}
+      vectorDimension: ${AI_RAG_EMBEDDING_DIMENSION:1024}
+      batchSize: ${AI_RAG_EMBEDDING_BATCH_SIZE:16}
+      timeout: ${AI_RAG_EMBEDDING_TIMEOUT:30s}
+      maxRetries: ${AI_RAG_EMBEDDING_MAX_RETRIES:1}
